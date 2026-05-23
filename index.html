@@ -672,9 +672,10 @@ window.openAddonForm = function(id) {
     document.getElementById('af-guide-type').value=a.guideType||'none';
     document.getElementById('af-guide-content').value=a.guideContent||'';
     document.getElementById('af-guide-size-kb').value=a.guideSizeKB||0;
+    document.getElementById('af-guide-file-name').value=a.guideFileName||'';
   } else {
     document.getElementById('addon-form-title').textContent='✦ Nuovo Addon';
-    ['af-id','af-icon','af-name','af-version','af-desc','af-lore','af-features','af-tags','af-download','af-guide-content','af-guide-size-kb'].forEach(i=>document.getElementById(i).value='');
+    ['af-id','af-icon','af-name','af-version','af-desc','af-lore','af-features','af-tags','af-download','af-guide-content','af-guide-size-kb','af-guide-file-name'].forEach(i=>document.getElementById(i).value='');
     document.getElementById('af-color').value='#a67c00';
     document.getElementById('af-guide-type').value='none';
   }
@@ -702,7 +703,8 @@ window.saveAddon = async function() {
     download: document.getElementById('af-download').value.trim(),
     guideType: document.getElementById('af-guide-type').value,
     guideContent: document.getElementById('af-guide-content').value.trim(),
-    guideSizeKB: parseInt(document.getElementById('af-guide-size-kb').value) || 0
+    guideSizeKB: parseInt(document.getElementById('af-guide-size-kb').value) || 0,
+    guideFileName: document.getElementById('af-guide-file-name').value.trim() || 
   };
   if (existId) { const i=D.addons.findIndex(a=>a.id===existId); if(i>=0) D.addons[i]=obj; }
   else D.addons.push(obj);
@@ -846,10 +848,36 @@ window.uploadGuideToGitHub = async function(input) {
 
     const url = `https://${ghUser}.github.io/${ghRepo}/${fileName}`;
 
+    // Cancella vecchio file se diverso
+    const oldFileName = document.getElementById('af-guide-file-name').value.trim();
+    if (oldFileName && oldFileName !== fileName) {
+      try {
+        const delCheck = await fetch(
+          `https://api.github.com/repos/${ghUser}/${ghRepo}/contents/${oldFileName}`,
+          { headers: { 'Authorization': 'token ' + ghToken, 'Accept': 'application/vnd.github.v3+json' } }
+        );
+        if (delCheck.ok) {
+          const delData = await delCheck.json();
+          await fetch(
+            `https://api.github.com/repos/${ghUser}/${ghRepo}/contents/${oldFileName}`,
+            {
+              method: 'DELETE',
+              headers: {
+                'Authorization': 'token ' + ghToken,
+                'Accept': 'application/vnd.github.v3+json',
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ message: 'Rimosso vecchio file guida: ' + oldFileName, sha: delData.sha })
+            }
+          );
+        }
+      } catch(e) { console.warn('Errore cancellazione vecchio file:', e); }
+    }
+
     document.getElementById('af-guide-content').value = url;
     document.getElementById('af-guide-type').value = 'url';
-    // Salva dimensione file per calcolo aperture
     document.getElementById('af-guide-size-kb').value = sizeKB;
+    document.getElementById('af-guide-file-name').value = fileName;
     updateGuideLabel();
 
     statusEl.textContent = '✅ Caricato! → ' + url;
@@ -1534,6 +1562,7 @@ header{text-align:center;padding:15px;background:linear-gradient(180deg,rgba(18,
         </select>
       </div>
       <input type="hidden" id="af-guide-size-kb" value="0">
+      <input type="hidden" id="af-guide-file-name" value="">
       <div class="form-group" id="guide-file-group" style="display:none;flex-direction:column;gap:8px;">
         <label>File HTML da caricare su GitHub</label>
         <label class="ed-btn" style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;width:fit-content;">

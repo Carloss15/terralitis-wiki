@@ -704,7 +704,7 @@ window.saveAddon = async function() {
     guideType: document.getElementById('af-guide-type').value,
     guideContent: document.getElementById('af-guide-content').value.trim(),
     guideSizeKB: parseInt(document.getElementById('af-guide-size-kb').value) || 0,
-    guideFileName: document.getElementById('af-guide-file-name').value.trim() || 
+    guideFileName: document.getElementById('af-guide-file-name').value.trim() || ''
   };
   if (existId) { const i=D.addons.findIndex(a=>a.id===existId); if(i>=0) D.addons[i]=obj; }
   else D.addons.push(obj);

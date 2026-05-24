@@ -107,7 +107,8 @@ async function fbDel(path) {
 }
 async function fbGetCollection(col) {
   try {
-    const snap = await getDocs(collection(db, col));
+    const parts = col.split('/');
+    const snap = await getDocs(collection(db, ...parts));
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch(e) { console.error(e); return []; }
 }
@@ -523,11 +524,25 @@ window.resetProgress = function() {
 // ═══════════════════════════════════════════
 //  GUIDE OVERLAY
 // ═══════════════════════════════════════════
-window.openWiki = function(addonId) {
+window.openWiki = async function(addonId) {
   const a = getAddon(addonId);
   if (!a) return;
-  // Traccia apertura
-  trackGuideOpen(addonId);
+
+  // Traccia apertura e attendi conferma Firebase prima di aggiornare badge
+  if (a.guideSizeKB && a.guideSizeKB > 0) {
+    await trackGuideOpen(addonId);
+    // Aggiorna badge di TUTTI gli addon (la banda è condivisa)
+    const allAddons = D.addons || [];
+    for (const addon of allAddons) {
+      if (addon.guideSizeKB && addon.guideSizeKB > 0) {
+        const el = document.getElementById('aperture-' + addon.id);
+        if (el) renderApertureBadge(addon.id, addon.guideSizeKB, el);
+      }
+    }
+  } else {
+    trackGuideOpen(addonId);
+  }
+
   const overlay = document.getElementById('wiki-overlay');
   document.getElementById('wiki-overlay-title').textContent = (isUrl(a.icon)?'📖':a.icon||'📖')+' '+a.name+' — Guida';
   const area = document.getElementById('wiki-content-area');
@@ -756,24 +771,38 @@ window.trackGuideOpen = async function(addonId) {
   existing.opens = (existing.opens || 0) + 1;
   existing.sizeKB = a.guideSizeKB || 0;
   await fbSet(key, existing);
+  invalidateStatsCache();
 };
+
+// Cache giornaliera statistiche per evitare troppe chiamate Firebase
+let _statsCache = { date: '', totalKBUsed: 0, lastFetch: 0 };
 
 // Calcola aperture rimanenti oggi per un addon
 async function getApertureRimanenti(addonId, sizeKB) {
   if (!sizeKB || sizeKB <= 0) return null;
   const today = new Date().toISOString().slice(0,10);
-  // Somma tutti i download di oggi su tutti gli addon
-  let totalKBUsed = 0;
-  const addons = D.addons || [];
-  for (const a of addons) {
-    const stat = await fbGet('guideStats/' + today + '/' + a.id);
-    if (stat && stat.opens && stat.sizeKB) {
-      totalKBUsed += stat.opens * stat.sizeKB;
+  const now = Date.now();
+
+  // Aggiorna cache se è passato più di 5 secondi o è un nuovo giorno
+  if (_statsCache.date !== today || (now - _statsCache.lastFetch) > 5000) {
+    const stats = await fbGetCollection('guideStats/' + today);
+    let totalKBUsed = 0;
+    for (const stat of stats) {
+      if (stat.opens && stat.sizeKB) {
+        totalKBUsed += stat.opens * stat.sizeKB;
+      }
     }
+    _statsCache = { date: today, totalKBUsed, lastFetch: now };
   }
+
   const limitKB = 1024 * 1024; // 1 GB in KB
-  const rimastoKB = Math.max(0, limitKB - totalKBUsed);
+  const rimastoKB = Math.max(0, limitKB - _statsCache.totalKBUsed);
   return Math.floor(rimastoKB / sizeKB);
+}
+
+// Invalida cache dopo ogni apertura
+function invalidateStatsCache() {
+  _statsCache.lastFetch = 0;
 }
 
 // Mostra badge aperture nella card addon

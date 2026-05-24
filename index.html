@@ -1087,7 +1087,7 @@ function updateFirebaseRulesStatus(dateStr) {
   const el = document.getElementById('firebase-rules-status');
   if (!el) return;
   if (!dateStr) {
-    el.innerHTML = '<span style="color:rgba(235,87,87,.8);">⚠ Data non impostata — inserisci quando hai aggiornato le regole l'ultima volta</span>';
+    el.innerHTML = '<span style="color:rgba(235,87,87,.8);">⚠ Data non impostata — inserisci quando hai aggiornato le regole l\'ultima volta</span>';
     return;
   }
   const updated = new Date(dateStr);
